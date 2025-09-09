@@ -13,6 +13,7 @@ struct timetrackerApp: App {
     let persistenceController = PersistenceController.shared
     @StateObject private var timerService = TimerService()
     @StateObject private var statusBarManager = StatusBarManager()
+    @StateObject private var autoStartService = AutoStartService()
     
     var body: some Scene {
         WindowGroup {
@@ -21,6 +22,7 @@ struct timetrackerApp: App {
                 .onAppear {
                     // Initialize the status bar manager when the app starts
                     statusBarManager.setTimerService(timerService)
+                    statusBarManager.setAutoStartService(autoStartService)
                     // Hide the main window immediately
                     DispatchQueue.main.async {
                         NSApp.setActivationPolicy(.accessory)
@@ -35,6 +37,7 @@ struct timetrackerApp: App {
             SettingsView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environmentObject(timerService)
+                .environmentObject(autoStartService)
         }
     }
 }

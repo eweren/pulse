@@ -4,6 +4,7 @@ import CoreData
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var autoStartService: AutoStartService
     @State private var selectedTab = 0
     
     var body: some View {
@@ -131,6 +132,7 @@ struct SettingsView: View {
                 ArchivedItemsView()
             case 4:
                 GeneralSettingsView()
+                    .environmentObject(autoStartService)
             default:
                 ClientManagementView()
             }
@@ -188,6 +190,7 @@ struct NavigationItem: View {
 
 struct GeneralSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject var autoStartService: AutoStartService
     @State private var showingResetAlert = false
     
     var body: some View {
@@ -205,6 +208,24 @@ struct GeneralSettingsView: View {
                 
                 Text("A privacy-first time tracking application that keeps all your data local while providing optional webhook integrations.")
                     .foregroundColor(.secondary)
+                
+                Divider()
+                
+                Text("Startup")
+                    .font(.headline)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Toggle("Launch at login", isOn: $autoStartService.isAutoStartEnabled)
+                            .toggleStyle(SwitchToggleStyle())
+                        
+                        Spacer()
+                    }
+                    
+                    Text("Automatically start the time tracker when you log in to your Mac")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
                 
                 Divider()
                 

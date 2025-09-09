@@ -7,6 +7,7 @@ class StatusBarManager: NSObject, ObservableObject, NSPopoverDelegate {
     private var statusItem: NSStatusItem?
     private var cancellables = Set<AnyCancellable>()
     private var timerService: TimerService?
+    private var autoStartService: AutoStartService?
     private var menuBarView: NSHostingView<MenuBarView>?
     private var popover: NSPopover?
     
@@ -33,6 +34,10 @@ class StatusBarManager: NSObject, ObservableObject, NSPopoverDelegate {
                 self?.updateStatusBarIcon()
             }
             .store(in: &cancellables)
+    }
+    
+    func setAutoStartService(_ autoStartService: AutoStartService) {
+        self.autoStartService = autoStartService
     }
     
     private func setupStatusBar() {
@@ -113,6 +118,7 @@ class StatusBarManager: NSObject, ObservableObject, NSPopoverDelegate {
         let menuBarView = MenuBarView()
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
             .environmentObject(timerService ?? TimerService())
+            .environmentObject(autoStartService ?? AutoStartService())
         
         let hostingView = NSHostingView(rootView: menuBarView)
         newPopover.contentViewController = NSViewController()

@@ -9,6 +9,7 @@ A privacy-first macOS time tracking application with enhanced features for manua
 ### Core Features
 
 - **Menu Bar Integration**: Lives quietly in your menu bar until you need it
+- **Auto-Start**: Optionally launch the app automatically when you log in to your Mac
 - **Client/Project Tracking**: Organize your work by clients and projects
 - **100% Local Operation**: All data stored locally on your Mac
 - **Manual Time Entry**: Add and edit time entries after the fact
@@ -60,9 +61,10 @@ The app is currently not really distributed, since it is a personal project. You
 ### Getting Started
 
 1. **Launch the App**: The app runs from the menu bar - look for the clock icon
-2. **Add Clients**: Go to Settings → Clients to add your clients
-3. **Add Projects**: Go to Settings → Projects to add projects for each client
-4. **Start Tracking**: Click the menu bar icon to start/stop timers
+2. **Auto-Start Setup**: Go to Settings → General to enable "Launch at login" if desired
+3. **Add Clients**: Go to Settings → Clients to add your clients
+4. **Add Projects**: Go to Settings → Projects to add projects for each client
+5. **Start Tracking**: Click the menu bar icon to start/stop timers
 
 ### Manual Time Entry
 
