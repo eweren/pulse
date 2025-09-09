@@ -42,16 +42,12 @@ jobs:
             -scheme timetracker \
             -configuration Release \
             -derivedDataPath ./build \
-            -archivePath ./build/TimeTracker.xcarchive \
-            archive
-
-      - name: Export app
-        run: |
-          cd timetracker
-          xcodebuild -exportArchive \
-            -archivePath ./build/TimeTracker.xcarchive \
-            -exportPath ./build/TimeTracker-Export \
-            -exportOptionsPlist ../.github/ExportOptions.plist
+            build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
 
       - name: Create DMG
         run: |
@@ -61,22 +57,22 @@ jobs:
 
           # Create DMG
           create-dmg \
-            --volname "Time Tracker" \
+            --volname "Pulse" \
             --volicon "./timetracker/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" \
             --window-pos 200 120 \
             --window-size 600 300 \
             --icon-size 100 \
-            --icon "TimeTracker.app" 175 120 \
-            --hide-extension "TimeTracker.app" \
+            --icon "timetracker.app" 175 120 \
+            --hide-extension "timetracker.app" \
             --app-drop-link 425 120 \
             --no-internet-enable \
-            "../TimeTracker-${{ steps.version.outputs.version }}.dmg" \
-            "./build/TimeTracker-Export/TimeTracker.app"
+            "../pulse-${{ steps.version.outputs.version }}.dmg" \
+            "./build/Build/Products/Release/pulse.app"
 
       - name: Calculate SHA256
         id: sha256
         run: |
-          SHA256=$(shasum -a 256 "TimeTracker-${{ steps.version.outputs.version }}.dmg" | cut -d' ' -f1)
+          SHA256=$(shasum -a 256 "pulse-${{ steps.version.outputs.version }}.dmg" | cut -d' ' -f1)
           echo "sha256=$SHA256" >> $GITHUB_OUTPUT
           echo "SHA256: $SHA256"
 
@@ -84,22 +80,28 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          name: Time Tracker v${{ steps.version.outputs.version }}
+          name: Pulse v${{ steps.version.outputs.version }}
           body: |
-            ## Time Tracker v${{ steps.version.outputs.version }}
+            ## Pulse v${{ steps.version.outputs.version }}
 
             A privacy-first macOS time tracking application with enhanced features for manual time entry and webhook notifications.
 
             ### Installation
 
+            **Important**: This app is not signed with an Apple Developer certificate, so macOS will show security warnings.
+
             1. Download the DMG file below
-            2. Mount the DMG and drag TimeTracker to your Applications folder
-            3. Right-click the app and select "Open" (first time only)
+            2. Mount the DMG and drag Pulse to your Applications folder
+            3. **Right-click** the app in Applications and select "Open" (first time only)
             4. Click "Open" when macOS asks for confirmation
+            5. The app will now open normally on subsequent launches
+
+            **Note**: If you see "App can't be opened because it is from an unidentified developer", right-click the app and select "Open" instead of double-clicking.
 
             ### Features
 
             - **Menu Bar Integration**: Lives quietly in your menu bar
+            - **Auto-Start**: Optionally launch the app automatically when you log in to your Mac
             - **Client/Project Tracking**: Organize your work by clients and projects
             - **100% Local Operation**: All data stored locally on your Mac
             - **Manual Time Entry**: Add and edit time entries after the fact
@@ -116,7 +118,7 @@ jobs:
             ${{ steps.sha256.outputs.sha256 }}
             ```
           files: |
-            TimeTracker-${{ steps.version.outputs.version }}.dmg
+            pulse-${{ steps.version.outputs.version }}.dmg
           draft: false
           prerelease: false
         env:
