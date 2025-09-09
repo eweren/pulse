@@ -58,12 +58,11 @@ jobs:
           # Create DMG
           create-dmg \
             --volname "Pulse" \
-            --volicon "./timetracker/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" \
             --window-pos 200 120 \
             --window-size 600 300 \
             --icon-size 100 \
-            --icon "timetracker.app" 175 120 \
-            --hide-extension "timetracker.app" \
+            --icon "pulse.app" 175 120 \
+            --hide-extension "pulse.app" \
             --app-drop-link 425 120 \
             --no-internet-enable \
             "../pulse-${{ steps.version.outputs.version }}.dmg" \

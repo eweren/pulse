@@ -203,7 +203,7 @@ struct GeneralSettingsView: View {
                 Text("About Enhanced Time Tracker")
                     .font(.headline)
                 
-                Text("Version 0.0.3")
+                Text("Version 0.0.4")
                     .foregroundColor(.secondary)
                 
                 Text("A privacy-first time tracking application that keeps all your data local while providing optional webhook integrations.")
