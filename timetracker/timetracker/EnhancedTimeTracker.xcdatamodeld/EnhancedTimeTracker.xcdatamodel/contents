@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22758" systemVersion="23F79" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="Client" representedClassName="Client" syncable="YES" codeGenerationType="class">
+        <attribute name="color" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="hourlyRate" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="isActive" optional="YES" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="projects" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Project" inverseName="client" inverseEntity="Project"/>
+        <relationship name="timeEntries" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TimeEntry" inverseName="client" inverseEntity="TimeEntry"/>
+    </entity>
+    <entity name="Project" representedClassName="Project" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="projectDescription" optional="YES" attributeType="String"/>
+        <attribute name="hourlyRate" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="isActive" optional="YES" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="client" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Client" inverseName="projects" inverseEntity="Client"/>
+        <relationship name="timeEntries" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TimeEntry" inverseName="project" inverseEntity="TimeEntry"/>
+    </entity>
+    <entity name="TimeEntry" representedClassName="TimeEntry" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="entryDescription" optional="YES" attributeType="String"/>
+        <attribute name="duration" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="endTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="isManual" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isRunning" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="startTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="client" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Client" inverseName="timeEntries" inverseEntity="Client"/>
+        <relationship name="project" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Project" inverseName="timeEntries" inverseEntity="Project"/>
+    </entity>
+    <entity name="WebhookConfig" representedClassName="WebhookConfig" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="events" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="isActive" optional="YES" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="retryAttempts" optional="YES" attributeType="Integer 32" defaultValueString="3" usesScalarValueType="YES"/>
+        <attribute name="secret" optional="YES" attributeType="String"/>
+        <attribute name="timeout" optional="YES" attributeType="Integer 32" defaultValueString="30000" usesScalarValueType="YES"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="url" optional="YES" attributeType="String"/>
+        <relationship name="deliveries" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WebhookDelivery" inverseName="webhook" inverseEntity="WebhookDelivery"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="WebhookDelivery" representedClassName="WebhookDelivery" syncable="YES" codeGenerationType="class">
+        <attribute name="attempts" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="event" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="lastAttemptAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="nextRetryAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="payload" optional="YES" attributeType="String"/>
+        <attribute name="responseBody" optional="YES" attributeType="String"/>
+        <attribute name="responseCode" optional="YES" attributeType="Integer 32" usesScalarValueType="YES"/>
+        <attribute name="status" optional="YES" attributeType="String"/>
+        <relationship name="webhook" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WebhookConfig" inverseName="deliveries" inverseEntity="WebhookConfig"/>
+    </entity>
+</model>
