@@ -288,7 +288,7 @@ class WebhookService: WebhookServiceProtocol, ObservableObject {
             
             // Calculate total time spent on this project
             let totalTime = calculateTotalTimeForProject(projectId: timeEntry.project?.id ?? "")
-            let totalTimeInHours = Double(totalTime) / 3600.0
+            let totalTimeInHours = Double(totalTime) / 60.0
             
             let projectData: [String: Any] = [
                 "id": timeEntry.project?.id ?? "",
@@ -305,8 +305,11 @@ class WebhookService: WebhookServiceProtocol, ObservableObject {
                 (timeEntry.client?.hourlyRate ?? 0.0)
             
             // Calculate earnings for this time entry
-            let durationInHours = Double(timeEntry.duration) / 3600.0
+            let durationInHours = Double(timeEntry.duration) / 60.0
             let earnings = durationInHours * effectiveHourlyRate
+            
+            // Calculate monthly totals
+            let monthlyTotals = calculateMonthlyTotals()
             
             let timeEntryData: [String: Any] = [
                 "id": timeEntry.id ?? "",
@@ -321,12 +324,15 @@ class WebhookService: WebhookServiceProtocol, ObservableObject {
                 "updatedAt": formatDate(timeEntry.updatedAt),
                 "hourlyRate": effectiveHourlyRate,
                 "earnings": earnings,
+                "totalHoursThisMonth": monthlyTotals.totalHours,
+                "totallyEarnedThisMonth": monthlyTotals.totalEarnings,
                 "client": clientData,
                 "project": projectData
             ]
             
             print("💰 [Webhook] Effective hourly rate: \(effectiveHourlyRate), Earnings: \(earnings)")
-            print("⏱️ [Webhook] Total time on project: \(totalTime) seconds (\(totalTimeInHours) hours)")
+            print("⏱️ [Webhook] Total time on project: \(totalTime) minutes (\(totalTimeInHours) hours)")
+            print("📅 [Webhook] Monthly totals: \(monthlyTotals.totalHours) hours, $\(monthlyTotals.totalEarnings) earnings")
             print("✅ [Webhook] TimeEntry conversion completed")
             return timeEntryData
         } else if let project = data as? Project {
@@ -512,11 +518,52 @@ class WebhookService: WebhookServiceProtocol, ObservableObject {
         do {
             let timeEntries = try context.fetch(request)
             let totalTime = timeEntries.reduce(0) { $0 + $1.duration }
-            print("📊 [Webhook] Calculated total time for project \(projectId): \(totalTime) seconds")
+            print("📊 [Webhook] Calculated total time for project \(projectId): \(totalTime) minutes")
             return totalTime
         } catch {
             print("❌ [Webhook] Failed to calculate total time for project \(projectId): \(error.localizedDescription)")
             return 0
+        }
+    }
+    
+    private func calculateMonthlyTotals() -> (totalHours: Double, totalEarnings: Double) {
+        let context = persistenceController.container.viewContext
+        let calendar = Calendar.current
+        let now = Date()
+        
+        // Get the start and end of current month
+        guard let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start,
+              let endOfMonth = calendar.dateInterval(of: .month, for: now)?.end else {
+            print("❌ [Webhook] Failed to calculate month boundaries")
+            return (0.0, 0.0)
+        }
+        
+        let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
+        request.predicate = NSPredicate(format: "startTime >= %@ AND startTime < %@", startOfMonth as NSDate, endOfMonth as NSDate)
+        
+        do {
+            let timeEntries = try context.fetch(request)
+            var totalMinutes: Int32 = 0
+            var totalEarnings: Double = 0.0
+            
+            for entry in timeEntries {
+                totalMinutes += entry.duration
+                
+                // Calculate earnings for this entry
+                let effectiveHourlyRate = (entry.project?.hourlyRate ?? 0.0) > 0.0 ? 
+                    (entry.project?.hourlyRate ?? 0.0) : 
+                    (entry.client?.hourlyRate ?? 0.0)
+                
+                let durationInHours = Double(entry.duration) / 60.0
+                totalEarnings += durationInHours * effectiveHourlyRate
+            }
+            
+            let totalHours = Double(totalMinutes) / 60.0
+            print("📊 [Webhook] Calculated monthly totals: \(totalHours) hours, $\(totalEarnings) earnings")
+            return (totalHours, totalEarnings)
+        } catch {
+            print("❌ [Webhook] Failed to calculate monthly totals: \(error.localizedDescription)")
+            return (0.0, 0.0)
         }
     }
 }
