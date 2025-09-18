@@ -46,11 +46,15 @@ jobs:
             -configuration Release \
             -derivedDataPath ./build \
             build \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            DEVELOPMENT_TEAM="" \
-            PROVISIONING_PROFILE_SPECIFIER=""
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES
+
+      - name: Verify code signing
+        run: |
+          cd timetracker
+          codesign -dv --verbose=4 ./build/Build/Products/Release/timetracker.app
+          codesign -v ./build/Build/Products/Release/timetracker.app
 
       - name: Create DMG
         run: |
@@ -90,15 +94,12 @@ jobs:
 
             ### Installation
 
-            **Important**: This app is not signed with an Apple Developer certificate, so macOS will show security warnings.
-
             1. Download the DMG file below
             2. Mount the DMG and drag Pulse to your Applications folder
-            3. **Right-click** the app in Applications and select "Open" (first time only)
-            4. Click "Open" when macOS asks for confirmation
-            5. The app will now open normally on subsequent launches
+            3. The app is code signed and should open normally
+            4. If macOS shows a security warning, right-click the app and select "Open" (first time only)
 
-            **Note**: If you see "App can't be opened because it is from an unidentified developer", right-click the app and select "Open" instead of double-clicking.
+            **Note**: This app is signed with an ad-hoc signature. For the best security experience, consider using a proper Apple Developer certificate for distribution.
 
             ### Features
 
