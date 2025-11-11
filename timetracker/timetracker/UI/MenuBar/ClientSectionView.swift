@@ -107,6 +107,11 @@ struct SimpleProjectRowView: View {
     @State private var totalTime: Int32 = 0
     @State private var isCurrentlyRunning = false
     @State private var calculatedEarnings: Double = 0.0
+    @State private var isExpanded = false
+    @State private var timeEntries: [TimeEntry] = []
+    @State private var showingEditEntry = false
+    @State private var selectedEntry: TimeEntry?
+    @Environment(\.managedObjectContext) private var viewContext
     
     private var clientColor: Color {
         guard let colorString = project.client?.color else {
@@ -129,66 +134,135 @@ struct SimpleProjectRowView: View {
     }
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Colored circle matching client color
-            Circle()
-                .fill(clientColor)
-                .frame(width: 12, height: 12).padding(.horizontal, 3)
-            
-            // Project name
-            Text(project.name ?? "Unknown Project")
-                .font(.subheadline)
-                .foregroundColor(.primary)
-            
-            Spacer()
-            
-            // Time and earnings display
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(formatTime(totalTime))
-                    .font(.subheadline)
-                    .foregroundColor(.primary)
-                    .monospacedDigit()
-                
-                if calculatedEarnings > 0 {
-                    Text(formatEarnings(calculatedEarnings))
+        VStack(spacing: 0) {
+            // Main project row
+            HStack(spacing: 12) {
+                // Expand/Collapse button
+                Button(action: {
+                    withAnimation {
+                        isExpanded.toggle()
+                        if isExpanded {
+                            loadTimeEntries()
+                        }
+                    }
+                }) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Colored circle matching client color
+                Circle()
+                    .fill(clientColor)
+                    .frame(width: 12, height: 12).padding(.horizontal, 3)
+                
+                // Project name
+                Text(project.name ?? "Unknown Project")
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                // Time and earnings display
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(formatTime(totalTime))
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
                         .monospacedDigit()
+                    
+                    if calculatedEarnings > 0 {
+                        Text(formatEarnings(calculatedEarnings))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
                 }
+                
+                // Play/Pause button
+                Button(action: {
+                    if isCurrentlyRunning {
+                        onStopTimer()
+                    } else {
+                        onStartTimer()
+                    }
+                }) {
+                    Image(systemName: isCurrentlyRunning ? "pause.fill" : "play.fill")
+                        .font(.caption)
+                        .foregroundColor(.white)
+                        .frame(width: 20, height: 20)
+                        .background(
+                            Circle()
+                                .fill(isCurrentlyRunning ? Color.orange : Color.green)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+            .background(
+                isCurrentlyRunning ? 
+                Color.blue.opacity(0.1) : 
+                Color.clear
+            )
             
-            // Play/Pause button
-            Button(action: {
-                if isCurrentlyRunning {
-                    onStopTimer()
-                } else {
-                    onStartTimer()
+            // Expanded time entries list
+            if isExpanded {
+                VStack(spacing: 0) {
+                    Divider()
+                    if timeEntries.isEmpty {
+                        Text("No time entries")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        ForEach(timeEntries) { entry in
+                            TimeEntryRowView(
+                                entry: entry,
+                                onEdit: {
+                                    // Validate entry has required properties
+                                    guard entry.id != nil else {
+                                        print("Error: Time entry has no ID")
+                                        return
+                                    }
+                                    // Set entry first, then show sheet after a tiny delay to ensure state propagation
+                                    selectedEntry = entry
+                                    // Use async to ensure state update propagates
+                                    Task { @MainActor in
+                                        // Verify entry is set before showing sheet
+                                        if selectedEntry != nil {
+                                            showingEditEntry = true
+                                        }
+                                    }
+                                },
+                                onDelete: {
+                                    Task {
+                                        await deleteTimeEntry(entry)
+                                    }
+                                }
+                            )
+                            
+                            if entry.id != timeEntries.last?.id {
+                                Divider()
+                                    .padding(.leading, 40)
+                            }
+                        }
+                    }
                 }
-            }) {
-                Image(systemName: isCurrentlyRunning ? "pause.fill" : "play.fill")
-                    .font(.caption)
-                    .foregroundColor(.white)
-                    .frame(width: 20, height: 20)
-                    .background(
-                        Circle()
-                            .fill(isCurrentlyRunning ? Color.orange : Color.green)
-                    )
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
             }
-            .buttonStyle(PlainButtonStyle())
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .background(
-            isCurrentlyRunning ? 
-            Color.blue.opacity(0.1) : 
-            Color.clear
-        )
         .onAppear {
             loadProjectTime()
             checkIfRunning()
         }
         .onChange(of: timePeriod) { _ in
             loadProjectTime()
+            if isExpanded {
+                loadTimeEntries()
+            }
         }
         .onChange(of: currentTimer) { newTimer in
             checkIfRunning()
@@ -198,6 +272,26 @@ struct SimpleProjectRowView: View {
         }
         .onChange(of: currentTimer?.project?.id) { newProjectId in
             checkIfRunning()
+        }
+        .sheet(isPresented: $showingEditEntry) {
+            EditTimeEntrySheetContent(
+                selectedEntry: selectedEntry,
+                onSave: {
+                    loadProjectTime()
+                    loadTimeEntries()
+                },
+                onDelete: {
+                    loadProjectTime()
+                    loadTimeEntries()
+                },
+                viewContext: viewContext
+            )
+        }
+        .onChange(of: showingEditEntry) { _, newValue in
+            // Clear selected entry when sheet is dismissed
+            if !newValue {
+                selectedEntry = nil
+            }
         }
     }
     
@@ -293,6 +387,160 @@ struct SimpleProjectRowView: View {
                 // This will trigger a view update
             }
         }
+    }
+    
+    private func loadTimeEntries() {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        let (startDate, endDate) = getDateRange(for: timePeriod, calendar: calendar, now: now)
+        
+        let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "project.id == %@ AND startTime >= %@ AND startTime < %@",
+            project.id ?? "",
+            startDate as NSDate,
+            endDate as NSDate
+        )
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \TimeEntry.startTime, ascending: false)]
+        
+        do {
+            timeEntries = try viewContext.fetch(request)
+        } catch {
+            print("Error loading time entries: \(error)")
+            timeEntries = []
+        }
+    }
+    
+    private func deleteTimeEntry(_ entry: TimeEntry) async {
+        do {
+            let timeEntryService = TimeEntryService()
+            try await timeEntryService.deleteTimeEntry(id: entry.id ?? "")
+            
+            await MainActor.run {
+                loadProjectTime()
+                loadTimeEntries()
+            }
+        } catch {
+            print("Error deleting time entry: \(error)")
+        }
+    }
+}
+
+struct EditTimeEntrySheetContent: View {
+    let selectedEntry: TimeEntry?
+    let onSave: () -> Void
+    let onDelete: () -> Void
+    let viewContext: NSManagedObjectContext
+    
+    var body: some View {
+        Group {
+            if let entry = selectedEntry {
+                EditTimeEntryView(timeEntry: entry, onSave: onSave, onDelete: onDelete)
+            } else {
+                VStack {
+                    ProgressView()
+                    Text("Loading entry...")
+                        .padding(.top, 8)
+                }
+                .frame(width: 350, height: 200)
+            }
+        }
+        .environment(\.managedObjectContext, viewContext)
+    }
+}
+
+struct TimeEntryRowView: View {
+    let entry: TimeEntry
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }
+    
+    private var timeFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }
+    
+    private func formatDuration(_ minutes: Int32) -> String {
+        let hours = minutes / 60
+        let mins = minutes % 60
+        if hours > 0 {
+            return String(format: "%dh %02dm", hours, mins)
+        } else {
+            return String(format: "%dm", mins)
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.entryDescription ?? "No description")
+                    .font(.caption)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                
+                HStack(spacing: 8) {
+                    if let startTime = entry.startTime {
+                        Text(timeFormatter.string(from: startTime))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if let endTime = entry.endTime {
+                        Text("–")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(timeFormatter.string(from: endTime))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    } else if entry.isRunning {
+                        Text("Running...")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            if !entry.isRunning {
+                Text(formatDuration(entry.duration))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+            
+            HStack(spacing: 4) {
+                Button(action: onEdit) {
+                    Image(systemName: "pencil")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Edit entry")
+                
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Delete entry")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .padding(.leading, 24)
     }
 }
 

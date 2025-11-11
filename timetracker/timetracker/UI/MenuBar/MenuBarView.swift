@@ -391,6 +391,8 @@ struct MenuBarView: View {
             )
             await MainActor.run {
                 timerService.startTimer(for: entry)
+                // Force refresh of all client sections to update button states
+                clientSectionRefreshTrigger.toggle()
             }
         } catch {
             print("Error starting timer: \(error)")
@@ -404,6 +406,8 @@ struct MenuBarView: View {
             _ = try await timeEntryService.stopTimer(entryId: timer.id ?? "")
             await MainActor.run {
                 timerService.stopTimer()
+                // Force refresh of all client sections to update button states
+                clientSectionRefreshTrigger.toggle()
             }
         } catch {
             print("Error stopping timer: \(error)")

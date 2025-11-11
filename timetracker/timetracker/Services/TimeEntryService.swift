@@ -107,6 +107,12 @@ class TimeEntryService: TimeEntryServiceProtocol, ObservableObject {
     }
     
     func updateTimeEntry(_ entry: TimeEntry) async throws -> TimeEntry {
+        // Recalculate duration if start and end times are set
+        if let startTime = entry.startTime, let endTime = entry.endTime {
+            entry.duration = Int32(endTime.timeIntervalSince(startTime) / 60)
+            entry.isRunning = false
+        }
+        
         entry.updatedAt = Date()
         try await saveContext()
         
