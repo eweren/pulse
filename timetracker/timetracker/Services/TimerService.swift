@@ -117,8 +117,10 @@ class TimerService: ObservableObject {
                 return
             }
             
-            let projectName = timer.project?.name ?? "Unknown Project"
-            self.statusBarTitle = "\(projectName) - \(self.formattedElapsedTime)"
+            let taskLabel = (timer.entryDescription?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
+                ?? timer.project?.name
+                ?? "Unknown Project"
+            self.statusBarTitle = "\(taskLabel) - \(self.formattedElapsedTime)"
         }
     }
 }

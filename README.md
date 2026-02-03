@@ -64,7 +64,8 @@ The app is currently not really distributed, since it is a personal project. You
 2. **Auto-Start Setup**: Go to Settings → General to enable "Launch at login" if desired
 3. **Add Clients**: Go to Settings → Clients to add your clients
 4. **Add Projects**: Go to Settings → Projects to add projects for each client
-5. **Start Tracking**: Click the menu bar icon to start/stop timers
+5. **Start Tracking**: Click the menu bar icon, choose a project's play button; you'll be asked what you're working on so the time entry has a clear task description
+6. **Filter by Period**: Use the period dropdown to view tracked time for "This week", "Last week", "This month", "Last month", "This year", or "All time"
 
 ### Manual Time Entry
 

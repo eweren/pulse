@@ -17,6 +17,8 @@ struct MenuBarView: View {
     @State private var earningsUpdateTrigger: Bool = false
     @State private var clientSectionRefreshTrigger: Bool = false
     @State private var hasActiveInvoiceWebhooks: Bool = false
+    @State private var pendingTimerStart: PendingTimerStart?
+    @State private var pendingTimerTaskDescription: String = ""
     
     var body: some View {
         VStack(spacing: 0) {
@@ -36,9 +38,8 @@ struct MenuBarView: View {
                                 client: client,
                                 currentTimer: timerService.currentTimer,
                                 onStartTimer: { project in
-                                    Task {
-                                        await startTimer(for: project, client: client)
-                                    }
+                                    pendingTimerTaskDescription = "Working on \(project.name ?? "project")"
+                                    pendingTimerStart = PendingTimerStart(project: project, client: client)
                                 },
                                 onStopTimer: {
                                     Task {
@@ -132,6 +133,24 @@ struct MenuBarView: View {
                 }
             }
         }
+        .sheet(item: $pendingTimerStart) { pending in
+            StartTimerTaskSheet(
+                projectName: pending.project.name ?? "Project",
+                taskDescription: $pendingTimerTaskDescription,
+                onStart: {
+                    let description = pendingTimerTaskDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let project = pending.project
+                    let client = pending.client
+                    pendingTimerStart = nil
+                    Task {
+                        await startTimer(for: project, client: client, description: description)
+                    }
+                },
+                onCancel: {
+                    pendingTimerStart = nil
+                }
+            )
+        }
         .confirmationDialog("Create Invoices", isPresented: $showingInvoiceAlert) {
             Button("Create invoices for last month") {
                 Task {
@@ -165,6 +184,13 @@ struct MenuBarView: View {
                             .font(.headline)
                             .foregroundColor(.primary)
                         
+                        if let desc = currentTimer.entryDescription?.trimmingCharacters(in: .whitespacesAndNewlines), !desc.isEmpty {
+                            Text(desc)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
+                        
                         Text(timerService.formattedElapsedTimeWithSeconds)
                             .font(.title2)
                             .fontWeight(.bold)
@@ -197,7 +223,7 @@ struct MenuBarView: View {
             HStack {
                 // Custom time period picker
                 CustomSelect(
-                    items: ["This week", "This month", "Last month", "This year", "All time"],
+                    items: ["This week", "Last week", "This month", "Last month", "This year", "All time"],
                     selectedItem: $selectedTimePeriod
                 ).zIndex(90)
                 
@@ -301,11 +327,19 @@ struct MenuBarView: View {
         let (startDate, endDate) = getDateRange(for: selectedTimePeriod, calendar: calendar, now: now)
         
         let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "startTime >= %@ AND startTime < %@ AND isRunning == NO",
-            startDate as NSDate,
-            endDate as NSDate
-        )
+        if let endDate = endDate {
+            request.predicate = NSPredicate(
+                format: "startTime >= %@ AND startTime < %@ AND isRunning == NO",
+                startDate as NSDate,
+                endDate as NSDate
+            )
+        } else {
+            // For "All time", no upper bound
+            request.predicate = NSPredicate(
+                format: "startTime >= %@ AND isRunning == NO",
+                startDate as NSDate
+            )
+        }
         
         do {
             let entries = try viewContext.fetch(request)
@@ -326,7 +360,13 @@ struct MenuBarView: View {
             if let currentTimer = timerService.currentTimer,
                let timerStartTime = currentTimer.startTime {
                 // Check if the timer started within the selected time period
-                if timerStartTime >= startDate && timerStartTime < endDate {
+                let isInRange: Bool
+                if let endDate = endDate {
+                    isInRange = timerStartTime >= startDate && timerStartTime < endDate
+                } else {
+                    isInRange = timerStartTime >= startDate
+                }
+                if isInRange {
                     let elapsedTime = timerService.elapsedTime
                     let duration = elapsedTime / 3600.0 // Convert seconds to hours (3600 seconds = 1 hour)
                     let projectRate = currentTimer.project?.hourlyRate ?? 0.0
@@ -382,12 +422,15 @@ struct MenuBarView: View {
     }
     
     
-    private func startTimer(for project: Project, client: Client) async {
+    private func startTimer(for project: Project, client: Client, description: String) async {
+        let descriptionToUse = description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Working on \(project.name ?? "project")"
+            : description
         do {
             let entry = try await timeEntryService.startTimer(
                 clientId: client.id ?? "",
                 projectId: project.id ?? "",
-                description: "Working on \(project.name ?? "project")"
+                description: descriptionToUse
             )
             await MainActor.run {
                 timerService.startTimer(for: entry)
@@ -444,11 +487,19 @@ struct MenuBarView: View {
             
             // Fetch time entries for the selected period
             let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "startTime >= %@ AND startTime < %@",
-                startDate as NSDate,
-                endDate as NSDate
-            )
+            if let endDate = endDate {
+                request.predicate = NSPredicate(
+                    format: "startTime >= %@ AND startTime < %@",
+                    startDate as NSDate,
+                    endDate as NSDate
+                )
+            } else {
+                // For "All time", no upper bound
+                request.predicate = NSPredicate(
+                    format: "startTime >= %@",
+                    startDate as NSDate
+                )
+            }
             request.sortDescriptors = [NSSortDescriptor(keyPath: \TimeEntry.startTime, ascending: true)]
             
             let timeEntries = try viewContext.fetch(request)
@@ -517,12 +568,18 @@ struct MenuBarView: View {
         }
     }
     
-    private func getDateRange(for timePeriod: String, calendar: Calendar, now: Date) -> (Date, Date) {
+    private func getDateRange(for timePeriod: String, calendar: Calendar, now: Date) -> (Date, Date?) {
         switch timePeriod {
         case "This week":
             let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
             let endOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.end ?? now
             return (startOfWeek, endOfWeek)
+            
+        case "Last week":
+            let lastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: now) ?? now
+            let startOfLastWeek = calendar.dateInterval(of: .weekOfYear, for: lastWeek)?.start ?? now
+            let endOfLastWeek = calendar.dateInterval(of: .weekOfYear, for: lastWeek)?.end ?? now
+            return (startOfLastWeek, endOfLastWeek)
             
         case "This month":
             let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
@@ -537,13 +594,13 @@ struct MenuBarView: View {
             
         case "This year":
             let startOfYear = calendar.dateInterval(of: .year, for: now)?.start ?? now
-            let endOfYear = calendar.dateInterval(of: .year, for: now)?.end ?? now
+            // Get the end of the year by adding 1 year and subtracting 1 second
+            let endOfYear = calendar.date(byAdding: .year, value: 1, to: startOfYear) ?? now
             return (startOfYear, endOfYear)
             
         case "All time":
-            let distantPast = Date.distantPast
-            let distantFuture = Date.distantFuture
-            return (distantPast, distantFuture)
+            // Return nil for endDate to indicate no upper bound
+            return (Date.distantPast, nil)
             
         default:
             // Default to this month
@@ -689,6 +746,55 @@ struct MenuBarView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
         .padding(.horizontal, 20)
+    }
+}
+
+// MARK: - Start timer task prompt
+
+struct PendingTimerStart: Identifiable {
+    let project: Project
+    let client: Client
+    var id: String { project.id ?? UUID().uuidString }
+}
+
+struct StartTimerTaskSheet: View {
+    let projectName: String
+    @Binding var taskDescription: String
+    let onStart: () -> Void
+    let onCancel: () -> Void
+    
+    private var canStart: Bool {
+        !taskDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("What are you working on?")
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            Text("Project: \(projectName)")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            TextField("Task description", text: $taskDescription)
+                .textFieldStyle(.roundedBorder)
+            
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    onCancel()
+                }
+                .keyboardShortcut(.cancelAction)
+                Button("Start") {
+                    onStart()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canStart)
+            }
+        }
+        .padding(24)
+        .frame(width: 320)
     }
 }
 

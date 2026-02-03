@@ -305,12 +305,18 @@ struct SimpleProjectRowView: View {
         return String(format: "€%.2f", earnings)
     }
     
-    private func getDateRange(for timePeriod: String, calendar: Calendar, now: Date) -> (Date, Date) {
+    private func getDateRange(for timePeriod: String, calendar: Calendar, now: Date) -> (Date, Date?) {
         switch timePeriod {
         case "This week":
             let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
             let endOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.end ?? now
             return (startOfWeek, endOfWeek)
+            
+        case "Last week":
+            let lastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: now) ?? now
+            let startOfLastWeek = calendar.dateInterval(of: .weekOfYear, for: lastWeek)?.start ?? now
+            let endOfLastWeek = calendar.dateInterval(of: .weekOfYear, for: lastWeek)?.end ?? now
+            return (startOfLastWeek, endOfLastWeek)
             
         case "This month":
             let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
@@ -325,13 +331,13 @@ struct SimpleProjectRowView: View {
             
         case "This year":
             let startOfYear = calendar.dateInterval(of: .year, for: now)?.start ?? now
-            let endOfYear = calendar.dateInterval(of: .year, for: now)?.end ?? now
+            // Get the end of the year by adding 1 year and subtracting 1 second
+            let endOfYear = calendar.date(byAdding: .year, value: 1, to: startOfYear) ?? now
             return (startOfYear, endOfYear)
             
         case "All time":
-            let distantPast = Date.distantPast
-            let distantFuture = Date.distantFuture
-            return (distantPast, distantFuture)
+            // Return nil for endDate to indicate no upper bound
+            return (Date.distantPast, nil)
             
         default:
             // Default to this month
@@ -348,12 +354,21 @@ struct SimpleProjectRowView: View {
         let (startDate, endDate) = getDateRange(for: timePeriod, calendar: calendar, now: now)
         
         let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "project.id == %@ AND startTime >= %@ AND startTime < %@",
-            project.id ?? "",
-            startDate as NSDate,
-            endDate as NSDate
-        )
+        if let endDate = endDate {
+            request.predicate = NSPredicate(
+                format: "project.id == %@ AND startTime >= %@ AND startTime < %@",
+                project.id ?? "",
+                startDate as NSDate,
+                endDate as NSDate
+            )
+        } else {
+            // For "All time", no upper bound
+            request.predicate = NSPredicate(
+                format: "project.id == %@ AND startTime >= %@",
+                project.id ?? "",
+                startDate as NSDate
+            )
+        }
         
         do {
             let entries = try project.managedObjectContext?.fetch(request) ?? []
@@ -396,12 +411,21 @@ struct SimpleProjectRowView: View {
         let (startDate, endDate) = getDateRange(for: timePeriod, calendar: calendar, now: now)
         
         let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "project.id == %@ AND startTime >= %@ AND startTime < %@",
-            project.id ?? "",
-            startDate as NSDate,
-            endDate as NSDate
-        )
+        if let endDate = endDate {
+            request.predicate = NSPredicate(
+                format: "project.id == %@ AND startTime >= %@ AND startTime < %@",
+                project.id ?? "",
+                startDate as NSDate,
+                endDate as NSDate
+            )
+        } else {
+            // For "All time", no upper bound
+            request.predicate = NSPredicate(
+                format: "project.id == %@ AND startTime >= %@",
+                project.id ?? "",
+                startDate as NSDate
+            )
+        }
         request.sortDescriptors = [NSSortDescriptor(keyPath: \TimeEntry.startTime, ascending: false)]
         
         do {
@@ -469,6 +493,13 @@ struct TimeEntryRowView: View {
         return formatter
     }
     
+    private var dateOnlyFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter
+    }
+    
     private func formatDuration(_ minutes: Int32) -> String {
         let hours = minutes / 60
         let mins = minutes % 60
@@ -489,6 +520,9 @@ struct TimeEntryRowView: View {
                 
                 HStack(spacing: 8) {
                     if let startTime = entry.startTime {
+                        Text(dateOnlyFormatter.string(from: startTime))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                         Text(timeFormatter.string(from: startTime))
                             .font(.caption2)
                             .foregroundColor(.secondary)
