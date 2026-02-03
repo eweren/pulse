@@ -11,6 +11,7 @@ struct MenuBarView: View {
     @State private var showingAddClient = false
     @State private var showingAddProject: Client?
     @State private var showingInvoiceAlert = false
+    @State private var showingReports = false
     @State private var clients: [Client] = []
     @State private var selectedTimePeriod = "This month"
     @State private var earningsUpdateTimer: Timer?
@@ -19,6 +20,12 @@ struct MenuBarView: View {
     @State private var hasActiveInvoiceWebhooks: Bool = false
     @State private var pendingTimerStart: PendingTimerStart?
     @State private var pendingTimerTaskDescription: String = ""
+    @State private var recentItems: [RecentProjectItem] = []
+    
+    private static let recentProjectIdsKey = "recentProjectIds"
+    private static let lastUsedProjectIdKey = "lastUsedProjectId"
+    private static let lastUsedClientIdKey = "lastUsedClientId"
+    private static let maxRecentProjects = 5
     
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +37,25 @@ struct MenuBarView: View {
             // Main content with clients and projects
             ScrollView {
                 LazyVStack(spacing: 0) {
+                    // Recent projects at top (last-used first)
+                    if !recentItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("RECENT")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 8)
+                                .padding(.bottom, 4)
+                            ForEach(recentItems) { item in
+                                if timerService.currentTimer?.project?.id != item.project.id {
+                                    quickStartRowView(project: item.project, client: item.client)
+                                }
+                            }
+                        }
+                        Divider()
+                    }
+                    
                     if clients.isEmpty {
                         emptyStateView
                     } else {
@@ -109,6 +135,9 @@ struct MenuBarView: View {
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $showingReports) {
+            ReportsView()
         }
         .onChange(of: showingSettings) { _, newValue in
             // When settings view is dismissed, check for webhook changes
@@ -296,6 +325,14 @@ struct MenuBarView: View {
             )
             
             ExpandableButton(
+                icon: "chart.bar.doc.horizontal",
+                text: "Reports",
+                action: {
+                    showingReports = true
+                }
+            )
+            
+            ExpandableButton(
                 icon: "gearshape",
                 text: "Settings",
                 action: {
@@ -324,7 +361,7 @@ struct MenuBarView: View {
         // Calculate total earnings for selected time period
         let calendar = Calendar.current
         let now = Date()
-        let (startDate, endDate) = getDateRange(for: selectedTimePeriod, calendar: calendar, now: now)
+        let (startDate, endDate) = PeriodDateRange.getDateRange(for: selectedTimePeriod, calendar: calendar, now: now)
         
         let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
         if let endDate = endDate {
@@ -385,6 +422,7 @@ struct MenuBarView: View {
     
     private func loadData() async {
         await loadClients()
+        await resolveRecentProjects()
     }
     
     private func checkForActiveInvoiceWebhooks() async {
@@ -421,6 +459,65 @@ struct MenuBarView: View {
         }
     }
     
+    private func resolveRecentProjects() async {
+        var ids = UserDefaults.standard.stringArray(forKey: Self.recentProjectIdsKey) ?? []
+        if ids.isEmpty, let legacyId = UserDefaults.standard.string(forKey: Self.lastUsedProjectIdKey), !legacyId.isEmpty {
+            ids = [legacyId]
+            UserDefaults.standard.set(ids, forKey: Self.recentProjectIdsKey)
+            UserDefaults.standard.removeObject(forKey: Self.lastUsedProjectIdKey)
+            UserDefaults.standard.removeObject(forKey: Self.lastUsedClientIdKey)
+        }
+        guard !ids.isEmpty else {
+            await MainActor.run { recentItems = [] }
+            return
+        }
+        await MainActor.run {
+            var resolved: [RecentProjectItem] = []
+            for projectId in ids.prefix(Self.maxRecentProjects) {
+                let request: NSFetchRequest<Project> = Project.fetchRequest()
+                request.predicate = NSPredicate(format: "id == %@ AND isActive == YES", projectId)
+                request.fetchLimit = 1
+                guard let project = try? viewContext.fetch(request).first,
+                      let client = project.client, client.isActive else { continue }
+                resolved.append(RecentProjectItem(client: client, project: project))
+            }
+            recentItems = resolved
+        }
+    }
+    
+    private func pushRecent(projectId: String) {
+        var ids = UserDefaults.standard.stringArray(forKey: Self.recentProjectIdsKey) ?? []
+        ids.removeAll { $0 == projectId }
+        ids.insert(projectId, at: 0)
+        ids = Array(ids.prefix(Self.maxRecentProjects))
+        UserDefaults.standard.set(ids, forKey: Self.recentProjectIdsKey)
+    }
+    
+    private func quickStartRowView(project: Project, client: Client) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "play.circle.fill")
+                .font(.title2)
+                .foregroundColor(.green)
+            Text("Continue with \(project.name ?? "Project")")
+                .font(.subheadline)
+                .foregroundColor(.primary)
+            Spacer()
+            Button(action: {
+                pendingTimerTaskDescription = "Working on \(project.name ?? "project")"
+                pendingTimerStart = PendingTimerStart(project: project, client: client)
+            }) {
+                Image(systemName: "play.fill")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(Color.green))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+    
     
     private func startTimer(for project: Project, client: Client, description: String) async {
         let descriptionToUse = description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -434,7 +531,10 @@ struct MenuBarView: View {
             )
             await MainActor.run {
                 timerService.startTimer(for: entry)
-                // Force refresh of all client sections to update button states
+                if let pid = project.id {
+                    pushRecent(projectId: pid)
+                }
+                Task { await resolveRecentProjects() }
                 clientSectionRefreshTrigger.toggle()
             }
         } catch {
@@ -483,7 +583,7 @@ struct MenuBarView: View {
             let now = Date()
             
             // Get date range based on selected time period
-            let (startDate, endDate) = getDateRange(for: selectedTimePeriod, calendar: calendar, now: now)
+            let (startDate, endDate) = PeriodDateRange.getDateRange(for: selectedTimePeriod, calendar: calendar, now: now)
             
             // Fetch time entries for the selected period
             let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
@@ -565,48 +665,6 @@ struct MenuBarView: View {
             
         } catch {
             print("Error exporting time entries: \(error)")
-        }
-    }
-    
-    private func getDateRange(for timePeriod: String, calendar: Calendar, now: Date) -> (Date, Date?) {
-        switch timePeriod {
-        case "This week":
-            let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
-            let endOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.end ?? now
-            return (startOfWeek, endOfWeek)
-            
-        case "Last week":
-            let lastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: now) ?? now
-            let startOfLastWeek = calendar.dateInterval(of: .weekOfYear, for: lastWeek)?.start ?? now
-            let endOfLastWeek = calendar.dateInterval(of: .weekOfYear, for: lastWeek)?.end ?? now
-            return (startOfLastWeek, endOfLastWeek)
-            
-        case "This month":
-            let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
-            let endOfMonth = calendar.dateInterval(of: .month, for: now)?.end ?? now
-            return (startOfMonth, endOfMonth)
-            
-        case "Last month":
-            let lastMonth = calendar.date(byAdding: .month, value: -1, to: now) ?? now
-            let startOfLastMonth = calendar.dateInterval(of: .month, for: lastMonth)?.start ?? now
-            let endOfLastMonth = calendar.dateInterval(of: .month, for: lastMonth)?.end ?? now
-            return (startOfLastMonth, endOfLastMonth)
-            
-        case "This year":
-            let startOfYear = calendar.dateInterval(of: .year, for: now)?.start ?? now
-            // Get the end of the year by adding 1 year and subtracting 1 second
-            let endOfYear = calendar.date(byAdding: .year, value: 1, to: startOfYear) ?? now
-            return (startOfYear, endOfYear)
-            
-        case "All time":
-            // Return nil for endDate to indicate no upper bound
-            return (Date.distantPast, nil)
-            
-        default:
-            // Default to this month
-            let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
-            let endOfMonth = calendar.dateInterval(of: .month, for: now)?.end ?? now
-            return (startOfMonth, endOfMonth)
         }
     }
     
@@ -750,6 +808,12 @@ struct MenuBarView: View {
 }
 
 // MARK: - Start timer task prompt
+
+struct RecentProjectItem: Identifiable {
+    let client: Client
+    let project: Project
+    var id: String { project.id ?? UUID().uuidString }
+}
 
 struct PendingTimerStart: Identifiable {
     let project: Project

@@ -91,13 +91,17 @@ class StatusBarManager: NSObject, ObservableObject, NSPopoverDelegate {
         }
     }
     
-    @objc private func statusBarButtonClicked() {
-        // Toggle popover visibility
+    /// Call this to show or hide the menu from the keyboard shortcut (must be called on main thread).
+    func togglePopover() {
         if let popover = popover, popover.isShown {
             popover.performClose(nil)
         } else {
             showPopover()
         }
+    }
+    
+    @objc private func statusBarButtonClicked() {
+        togglePopover()
     }
     
     private func showPopover() {

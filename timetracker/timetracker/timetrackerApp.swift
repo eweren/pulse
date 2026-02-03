@@ -7,13 +7,25 @@
 
 import SwiftUI
 import CoreData
+import AppKit
 
 @main
 struct timetrackerApp: App {
     let persistenceController = PersistenceController.shared
-    @StateObject private var timerService = TimerService()
-    @StateObject private var statusBarManager = StatusBarManager()
-    @StateObject private var autoStartService = AutoStartService()
+    @StateObject private var timerService: TimerService
+    @StateObject private var statusBarManager: StatusBarManager
+    @StateObject private var autoStartService: AutoStartService
+    @StateObject private var reminderService: ReminderService
+    @StateObject private var idleService: IdleService
+    
+    init() {
+        let timer = TimerService()
+        _timerService = StateObject(wrappedValue: timer)
+        _statusBarManager = StateObject(wrappedValue: StatusBarManager())
+        _autoStartService = StateObject(wrappedValue: AutoStartService())
+        _reminderService = StateObject(wrappedValue: ReminderService(timerService: timer))
+        _idleService = StateObject(wrappedValue: IdleService(timerService: timer))
+    }
     
     var body: some Scene {
         WindowGroup {
@@ -27,6 +39,10 @@ struct timetrackerApp: App {
                     DispatchQueue.main.async {
                         NSApp.setActivationPolicy(.accessory)
                     }
+                    // Global keyboard shortcut: Control+Command+T to show menu (requires Accessibility permission)
+                    registerKeyboardShortcut(statusBarManager: statusBarManager)
+                    // Start idle detection polling (stops timer when user is idle for configured minutes)
+                    idleService.startPolling()
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -38,6 +54,20 @@ struct timetrackerApp: App {
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environmentObject(timerService)
                 .environmentObject(autoStartService)
+        }
+    }
+    
+    private func registerKeyboardShortcut(statusBarManager: StatusBarManager) {
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            // Control+Command+T (keyCode 17 = 'T')
+            let match = event.keyCode == 17
+                && event.modifierFlags.contains(.control)
+                && event.modifierFlags.contains(.command)
+            if match {
+                DispatchQueue.main.async {
+                    statusBarManager.togglePopover()
+                }
+            }
         }
     }
 }

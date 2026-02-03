@@ -18,6 +18,11 @@ A privacy-first macOS time tracking application with enhanced features for manua
 
 ### Enhanced Features
 
+- **Keyboard Shortcut**: Press Control-Command-T from anywhere to open the menu (requires Accessibility permission in System Settings).
+- **Quick-Start**: A "Continue with [Project]" row at the top of the menu lets you restart the last-used project with one click.
+- **Timer reminder**: Optional notification when the timer has been running for a set number of hours (2, 4, 6, or 8). Configure in Settings → General.
+- **Idle detection**: Optionally stop the timer automatically after a period of no keyboard or mouse activity (5, 10, 15, or 30 minutes). Configure in Settings → General.
+- **Reports**: Time and earnings breakdown by client for any period (This week through All time). Open from the "Reports" button in the menu.
 - **Webhook Notifications**: Optional outbound notifications to external systems. For example create invoices for last month with n8n.
 - **Secure Delivery**: HTTPS-only webhooks with HMAC signatures
 - **Retry Logic**: Automatic retry with exponential backoff
@@ -60,12 +65,13 @@ The app is currently not really distributed, since it is a personal project. You
 
 ### Getting Started
 
-1. **Launch the App**: The app runs from the menu bar - look for the clock icon
+1. **Launch the App**: The app runs from the menu bar - look for the clock icon. You can also press **Control-Command-T** to open the menu (add the app to System Settings → Privacy & Security → Accessibility if the shortcut does not work).
 2. **Auto-Start Setup**: Go to Settings → General to enable "Launch at login" if desired
 3. **Add Clients**: Go to Settings → Clients to add your clients
 4. **Add Projects**: Go to Settings → Projects to add projects for each client
 5. **Start Tracking**: Click the menu bar icon, choose a project's play button; you'll be asked what you're working on so the time entry has a clear task description
 6. **Filter by Period**: Use the period dropdown to view tracked time for "This week", "Last week", "This month", "Last month", "This year", or "All time"
+7. **Reports**: Click "Reports" in the menu to see time and earnings by client for the selected period
 
 ### Manual Time Entry
 

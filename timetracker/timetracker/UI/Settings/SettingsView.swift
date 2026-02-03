@@ -1,5 +1,7 @@
 import SwiftUI
 import CoreData
+import UserNotifications
+import AppKit
 
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -192,40 +194,134 @@ struct GeneralSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var autoStartService: AutoStartService
     @State private var showingResetAlert = false
+    @AppStorage("reminderEnabled") private var reminderEnabled = false
+    @AppStorage("reminderAfterHours") private var reminderAfterHours = 4.0
+    @AppStorage("idleDetectionEnabled") private var idleDetectionEnabled = false
+    @AppStorage("idleTimeoutMinutes") private var idleTimeoutMinutes = 15
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("General Settings")
-                .font(.title2)
-                .fontWeight(.semibold)
-            
-            VStack(alignment: .leading, spacing: 16) {
-                Text("About Enhanced Time Tracker")
-                    .font(.headline)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("General Settings")
+                    .font(.title2)
+                    .fontWeight(.semibold)
                 
-                Text("Version 0.0.12")
-                    .foregroundColor(.secondary)
-                
-                Text("A privacy-first time tracking application that keeps all your data local while providing optional webhook integrations.")
-                    .foregroundColor(.secondary)
-                
-                Divider()
-                
-                Text("Startup")
-                    .font(.headline)
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Toggle("Launch at login", isOn: $autoStartService.isAutoStartEnabled)
-                            .toggleStyle(SwitchToggleStyle())
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("About Enhanced Time Tracker")
+                        .font(.headline)
+                    
+                    Text("Version 0.0.12")
+                        .foregroundColor(.secondary)
+                    
+                    Text("A privacy-first time tracking application that keeps all your data local while providing optional webhook integrations.")
+                        .foregroundColor(.secondary)
+                        .lineLimit(nil)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    
+                    Divider()
+                    
+                    Text("Startup")
+                        .font(.headline)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Toggle("Launch at login", isOn: $autoStartService.isAutoStartEnabled)
+                                .toggleStyle(SwitchToggleStyle())
+                            
+                            Spacer()
+                        }
                         
-                        Spacer()
+                        Text("Automatically start the time tracker when you log in to your Mac")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(nil)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     
-                    Text("Automatically start the time tracker when you log in to your Mac")
+                    Divider()
+                    
+                    Text("Keyboard shortcut")
+                        .font(.headline)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Default: Control-Command-T to show the menu from anywhere. Requires Accessibility permission in System Settings → Privacy & Security → Accessibility.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(nil)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Open Accessibility Settings") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.borderless)
                         .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                    }
+                    
+                    Divider()
+                    
+                    Text("Timer reminder")
+                        .font(.headline)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle("Notify when timer has been running for …", isOn: $reminderEnabled)
+                            .toggleStyle(SwitchToggleStyle())
+                            .onChange(of: reminderEnabled) { _, newValue in
+                                if newValue {
+                                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+                                }
+                            }
+                        if reminderEnabled {
+                            Picker("Duration", selection: $reminderAfterHours) {
+                                Text("2 hours").tag(2.0)
+                                Text("4 hours").tag(4.0)
+                                Text("6 hours").tag(6.0)
+                                Text("8 hours").tag(8.0)
+                            }
+                            .pickerStyle(MenuPickerStyle())
+                            .frame(width: 120)
+                        }
+                        Text("Send a notification if the timer has been running for this long (e.g. to avoid forgetting to stop it).")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(nil)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    
+                    Divider()
+                    
+                    Text("Idle detection")
+                        .font(.headline)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle("Stop timer when idle for …", isOn: $idleDetectionEnabled)
+                            .toggleStyle(SwitchToggleStyle())
+                        if idleDetectionEnabled {
+                            Picker("Idle timeout", selection: $idleTimeoutMinutes) {
+                                Text("5 minutes").tag(5)
+                                Text("10 minutes").tag(10)
+                                Text("15 minutes").tag(15)
+                                Text("30 minutes").tag(30)
+                            }
+                            .pickerStyle(MenuPickerStyle())
+                            .frame(width: 160)
+                        }
+                        Text("If no keyboard or mouse activity for this long, the running timer will be stopped automatically.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(nil)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 
                 Divider()
                 
@@ -277,10 +373,13 @@ struct GeneralSettingsView: View {
                     .tint(.red)
                 }
                 
-                Spacer()
+                Spacer(minLength: 20)
+                }
             }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
+        .background(Color(NSColor.windowBackgroundColor))
         .alert("Reset All Time Entries", isPresented: $showingResetAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Reset All", role: .destructive) {

@@ -305,53 +305,11 @@ struct SimpleProjectRowView: View {
         return String(format: "€%.2f", earnings)
     }
     
-    private func getDateRange(for timePeriod: String, calendar: Calendar, now: Date) -> (Date, Date?) {
-        switch timePeriod {
-        case "This week":
-            let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
-            let endOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.end ?? now
-            return (startOfWeek, endOfWeek)
-            
-        case "Last week":
-            let lastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: now) ?? now
-            let startOfLastWeek = calendar.dateInterval(of: .weekOfYear, for: lastWeek)?.start ?? now
-            let endOfLastWeek = calendar.dateInterval(of: .weekOfYear, for: lastWeek)?.end ?? now
-            return (startOfLastWeek, endOfLastWeek)
-            
-        case "This month":
-            let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
-            let endOfMonth = calendar.dateInterval(of: .month, for: now)?.end ?? now
-            return (startOfMonth, endOfMonth)
-            
-        case "Last month":
-            let lastMonth = calendar.date(byAdding: .month, value: -1, to: now) ?? now
-            let startOfLastMonth = calendar.dateInterval(of: .month, for: lastMonth)?.start ?? now
-            let endOfLastMonth = calendar.dateInterval(of: .month, for: lastMonth)?.end ?? now
-            return (startOfLastMonth, endOfLastMonth)
-            
-        case "This year":
-            let startOfYear = calendar.dateInterval(of: .year, for: now)?.start ?? now
-            // Get the end of the year by adding 1 year and subtracting 1 second
-            let endOfYear = calendar.date(byAdding: .year, value: 1, to: startOfYear) ?? now
-            return (startOfYear, endOfYear)
-            
-        case "All time":
-            // Return nil for endDate to indicate no upper bound
-            return (Date.distantPast, nil)
-            
-        default:
-            // Default to this month
-            let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
-            let endOfMonth = calendar.dateInterval(of: .month, for: now)?.end ?? now
-            return (startOfMonth, endOfMonth)
-        }
-    }
-    
     private func loadProjectTime() {
         let calendar = Calendar.current
         let now = Date()
         
-        let (startDate, endDate) = getDateRange(for: timePeriod, calendar: calendar, now: now)
+        let (startDate, endDate) = PeriodDateRange.getDateRange(for: timePeriod, calendar: calendar, now: now)
         
         let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
         if let endDate = endDate {
@@ -408,7 +366,7 @@ struct SimpleProjectRowView: View {
         let calendar = Calendar.current
         let now = Date()
         
-        let (startDate, endDate) = getDateRange(for: timePeriod, calendar: calendar, now: now)
+        let (startDate, endDate) = PeriodDateRange.getDateRange(for: timePeriod, calendar: calendar, now: now)
         
         let request: NSFetchRequest<TimeEntry> = TimeEntry.fetchRequest()
         if let endDate = endDate {
